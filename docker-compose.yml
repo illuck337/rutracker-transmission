@@ -1,0 +1,47 @@
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    user: 1000:1000 # should be owner of volumes
+    ports:
+      - "4533:4533"
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      # Optional: put your config options customization here. Examples:
+      ND_LOGLEVEL: debug
+    volumes:
+      - "/home/media/data:/data"
+      - "/home/media/music:/music:ro"
+
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    container_name: transmission
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Samara
+      - USER=admin
+      - PASS=P@ssw0rd
+    volumes:
+      - ./transmission/config:/config
+      - /home/media/music:/downloads
+      - ./transmission/watch:/watch
+    ports:
+      - 9091:9091
+      - 51413:51413
+      - 51413:51413/udp
+    restart: unless-stopped
+  rutracker-service:
+    build: .
+    container_name: rutracker-service
+    ports:
+      - "5000:5000"
+    environment:
+      - RUTRACKER_LOGIN=${RUTRACKER_LOGIN}
+      - RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
+      - TRANSMISSION_HOST=transmission
+      - TRANSMISSION_PORT=9091
+      - TRANSMISSION_USER=${TRANSMISSION_USER}
+      - TRANSMISSION_PASSWORD=${TRANSMISSION_PASSWORD}
+      - ALL_PROXY=socks5h://[ip]:[port] #for connect in tracker

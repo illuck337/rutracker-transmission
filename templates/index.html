@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuTracker → Transmission</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #5f6368;
+            margin-bottom: 30px;
+        }
+        .search-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+        }
+        #search-input {
+            flex: 1;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #1557b0;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .results-section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #5f6368;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .download-btn {
+            background: #34a853;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .download-btn:hover {
+            background: #2c8e46;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #5f6368;
+        }
+        .status-section {
+            margin-top: 30px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .torrent-item {
+            border-top: 1px solid #eee;
+            padding: 12px 0;
+        }
+        .torrent-name {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 4px;
+            height: 20px;
+            margin: 5px 0;
+        }
+        .progress-fill {
+            background: #34a853;
+            height: 100%;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .torrent-details {
+            font-size: 12px;
+            color: #5f6368;
+        }
+        .error {
+            color: #d93025;
+            padding: 10px;
+            background: #fce8e6;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>RuTracker → Transmission</h1>
+    <div class="subtitle">Поиск торрентов и отправка на загрузку</div>
+
+    <div class="search-container">
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Введите запрос...">
+            <button onclick="search()" id="search-btn">Поиск</button>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">Поиск...</div>
+
+    <div class="results-section" id="results-section">
+        <table id="results-table">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Размер</th>
+                    <th>Сиды</th>
+                    <th>Личи</th>
+                    <th>Действие</th>
+                </tr>
+            </thead>
+            <tbody id="results-body">
+                <tr><td colspan="5">Начните поиск</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="status-section">
+        <div class="status-header">
+            <h2>Текущие загрузки</h2>
+            <button onclick="loadStatus()">Обновить</button>
+        </div>
+        <div id="status-list">Загрузка...</div>
+    </div>
+
+    <script>
+        async function search() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) return;
+
+            const btn = document.getElementById('search-btn');
+            const loading = document.getElementById('loading');
+            const tbody = document.getElementById('results-body');
+
+            btn.disabled = true;
+            loading.style.display = 'block';
+            tbody.innerHTML = '<tr><td colspan="5">Поиск...</td></tr>';
+
+            try {
+                const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="error">Ошибка: ${data.error}</td></tr>`;
+                    return;
+                }
+
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">Ничего не найдено</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                data.forEach(torrent => {
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = torrent.title;
+                    row.insertCell(1).textContent = formatSize(torrent.size);
+                    row.insertCell(2).textContent = torrent.seeds;
+                    row.insertCell(3).textContent = torrent.leeches;
+
+                    const actionCell = row.insertCell(4);
+                    const btn = document.createElement('button');
+                    btn.textContent = 'Скачать';
+                    btn.className = 'download-btn';
+                    btn.onclick = () => downloadTorrent(torrent.topic_id);
+                    actionCell.appendChild(btn);
+                });
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" class="error">Ошибка: ${err.message}</td></tr>`;
+            } finally {
+                btn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+
+        async function downloadTorrent(topicId) {
+            try {
+                const response = await fetch(`/download/${topicId}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    loadStatus();
+                } else {
+                    alert('Ошибка: ' + result.error);
+                }
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+            }
+        }
+
+        async function loadStatus() {
+            const statusDiv = document.getElementById('status-list');
+            statusDiv.innerHTML = 'Загрузка...';
+
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+
+                if (data.error) {
+                    statusDiv.innerHTML = `<div class="error">Ошибка: ${data.error}</div>`;
+                    return;
+                }
+
+                if (data.length === 0) {
+                    statusDiv.innerHTML = 'Нет активных загрузок';
+                    return;
+                }
+
+                statusDiv.innerHTML = '';
+                data.forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = 'torrent-item';
+                    div.innerHTML = `
+                        <div class="torrent-name">${escapeHtml(t.name)}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${t.progress}%"></div>
+                        </div>
+                        <div class="torrent-details">
+                            Прогресс: ${t.progress.toFixed(1)}% | 
+                            Статус: ${t.status} | 
+                            Скорость: ${formatSpeed(t.rate_download)} ↓ / ${formatSpeed(t.rate_upload)} ↑
+                        </div>
+                    `;
+                    statusDiv.appendChild(div);
+                });
+            } catch (err) {
+                statusDiv.innerHTML = `<div class="error">Ошибка: ${err.message}</div>`;
+            }
+        }
+
+        function formatSize(bytes) {
+            if (!bytes) return '?';
+            const sizes = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+        }
+
+        function formatSpeed(bytesPerSec) {
+            if (!bytesPerSec) return '0';
+            return formatSize(bytesPerSec) + '/с';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // Загружаем статус при старте и каждые 5 секунд
+        loadStatus();
+        setInterval(loadStatus, 5000);
+    </script>
+</body>
+</html>

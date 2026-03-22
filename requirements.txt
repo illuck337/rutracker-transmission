@@ -1,0 +1,5 @@
+flask
+python-dotenv
+transmission-rpc
+py-rutracker-client
+PySocks
